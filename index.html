@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Theory Test Trainer</title>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--ink:#172033;--muted:#687386;--line:#dfe4ec;--accent:#2563eb;--good:#15803d;--bad:#dc2626}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+header{background:#111827;color:#fff;padding:22px 16px}.wrap{max-width:1050px;margin:auto}h1{margin:0 0 4px}header p{margin:0;color:#cbd5e1}
+nav{display:flex;gap:8px;overflow:auto;margin:15px auto 0;max-width:1050px}button,select{font:inherit}
+button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+button:hover{transform:translateY(-1px)}button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.good{background:#ecfdf3;color:var(--good);border-color:#bbf7d0}button.bad{background:#fef2f2;color:var(--bad);border-color:#fecaca}
+main{max-width:1050px;margin:auto;padding:20px 14px 50px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 3px 12px #00000008;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}.stat{font-size:30px;font-weight:800}.muted{color:var(--muted)}
+.row,.space{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.space{justify-content:space-between}
+.progress{height:9px;background:#e5e7eb;border-radius:99px;overflow:hidden}.progress>div{height:100%;background:var(--accent)}
+.tag{display:inline-block;padding:5px 9px;border-radius:99px;background:#eef2ff;color:#3730a3;font-size:12px;font-weight:750}
+.answers{display:grid;gap:10px;margin-top:16px}.answers button{text-align:left;padding:14px}.answers button.correct{border:2px solid var(--good);background:#f0fdf4}.answers button.wrong{border:2px solid var(--bad);background:#fef2f2}
+.hidden{display:none}select{padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 7px;border-bottom:1px solid var(--line)}
+.small{font-size:13px}.result{padding:12px;border-radius:10px;margin-top:12px}.ok{background:#f0fdf4;color:#166534}.no{background:#fef2f2;color:#991b1b}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<h1>🚗 Theory Test Trainer</h1>
+<p>Original practice questions · target test date: <strong>6 December 2026</strong></p>
+<nav>
+<button onclick="show('home')">Dashboard</button><button onclick="show('practice')">Practice</button>
+<button onclick="show('mock')">Mock Test</button><button onclick="show('bank')">Question Bank</button><button onclick="show('importExport')">Import / Export</button>
+</nav></div></header>
+
+<main>
+<section id="home">
+<div class="card"><div class="space"><div><strong>Countdown</strong><div id="countdown"></div></div><button class="primary" onclick="show('practice');startPractice('dontknow')">Practice weak questions</button></div></div>
+<div class="grid">
+<div class="card"><div class="muted">Answered</div><div class="stat" id="answered">0</div></div>
+<div class="card"><div class="muted">Know</div><div class="stat" id="known">0</div></div>
+<div class="card"><div class="muted">Don't know</div><div class="stat" id="unknown">0</div></div>
+<div class="card"><div class="muted">Accuracy</div><div class="stat" id="accuracy">0%</div></div>
+</div>
+<div class="card"><h2>Category progress</h2><div id="categoryProgress"></div></div>
+</section>
+
+<section id="practice" class="hidden">
+<div class="card"><div class="space"><div><h2 style="margin:0">Practice</h2><p class="muted">Answer a question, then mark it as Know or Don't Know.</p></div>
+<select id="practiceFilter" onchange="startPractice(this.value)"><option value="all">All</option><option value="dontknow">Don't know</option><option value="unanswered">Unanswered</option></select></div>
+<div id="practiceArea"></div></div>
+</section>
+
+<section id="mock" class="hidden"><div class="card"><h2>Mock Test</h2><p class="muted">This framework can scale to hundreds of questions. The starter bank below is intentionally original practice material, not official DVSA wording.</p>
+<div class="row"><label>Questions: <select id="mockSize"><option>10</option><option>20</option><option>30</option><option>50</option></select></label><button class="primary" onclick="startMock()">Start mock</button></div>
+<div id="mockArea"></div></div></section>
+
+<section id="bank" class="hidden"><div class="card"><div class="space"><div><h2 style="margin:0">Question Bank</h2><p class="muted">Filter, inspect and change your learning status.</p></div>
+<select id="bankFilter" onchange="renderBank(this.value)"><option value="all">All</option><option value="known">Know</option><option value="dontknow">Don't know</option><option value="unanswered">Unanswered</option></select></div>
+<div id="bankArea"></div></div></section>
+
+<section id="importExport" class="hidden">
+<div class="card">
+  <h2>Import / Export Questions</h2>
+  <p class="muted">Build a large question bank outside the app, then import it. Your current bank can also be exported as JSON or CSV.</p>
+
+  <div class="grid">
+    <div class="card" style="margin:0">
+      <h3>Import</h3>
+      <p class="small muted">Supported: <strong>JSON</strong> and <strong>CSV</strong>.</p>
+      <input id="questionFile" type="file" accept=".json,.csv,application/json,text/csv">
+      <div class="row" style="margin-top:12px">
+        <button class="primary" onclick="importQuestions()">Import questions</button>
+      </div>
+      <p class="small muted">Import replaces the current question bank. Your Know/Don't Know progress is kept where IDs still match.</p>
+      <div id="importResult"></div>
+    </div>
+
+    <div class="card" style="margin:0">
+      <h3>Export</h3>
+      <p class="small muted">Use JSON if you want to preserve the complete question format. CSV is convenient for editing in Excel/Google Sheets.</p>
+      <div class="row">
+        <button class="primary" onclick="exportJSON()">Export JSON</button>
+        <button onclick="exportCSV()">Export CSV</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin:14px 0 0">
+    <h3>CSV format</h3>
+    <p class="small muted">Your CSV should have these columns:</p>
+    <code>id,category,question,answerA,answerB,answerC,answerD,correct,explanation</code>
+    <p class="small muted">For <strong>correct</strong>, use 0 for A, 1 for B, 2 for C, or 3 for D.</p>
+    <button onclick="downloadTemplate()">Download CSV template</button>
+  </div>
+</div>
+</section>
+
+</main>
+
+<script>
+/*
+QUESTION FORMAT
+{
+ id: 1,
+ category: "Road Signs",
+ question: "Question text",
+ answers: ["A","B","C","D"],
+ correct: 1, // zero-based answer index
+ explanation: "Why the answer is correct"
+}
+Add hundreds of questions by adding objects to QUESTIONS, or use the Import / Export screen to load JSON/CSV.
+*/
+
+const QUESTIONS=[
+{id:1,category:"Road Signs",question:"What does a red circular sign generally communicate?",answers:["A warning","A prohibition or restriction","A place of interest","A motorway service area"],correct:1,explanation:"Red circular signs are generally used for prohibitions and restrictions."},
+{id:2,category:"Road Signs",question:"What is the usual purpose of a triangular sign with a red border?",answers:["To warn about a hazard","To show a speed limit","To identify parking","To show a one-way road"],correct:0,explanation:"Triangular signs with red borders generally warn of hazards or changes ahead."},
+{id:3,category:"Junctions",question:"Before turning at a junction, what is the safest general routine?",answers:["Check mirrors, signal when needed, position and turn when safe","Accelerate to clear the junction","Only check the mirror on the turning side","Sound the horn continuously"],correct:0,explanation:"Observation, appropriate signalling, positioning and a safe manoeuvre are key."},
+{id:4,category:"Junctions",question:"Why should you avoid blocking a junction?",answers:["It saves fuel","It can obstruct other road users and cause congestion","It makes your indicators brighter","It gives pedestrians priority everywhere"],correct:1,explanation:"Blocking junctions can prevent other traffic from moving safely."},
+{id:5,category:"Motorways",question:"Where a hard shoulder is provided, what is its primary purpose?",answers:["Normal overtaking","Emergency use","Taking a break","Changing lanes"],correct:1,explanation:"A traditional hard shoulder is primarily for emergencies and breakdowns, subject to the road's signs and rules."},
+{id:6,category:"Motorways",question:"If you miss your motorway exit, what should you normally do?",answers:["Reverse on the hard shoulder","Stop and wait","Continue to the next suitable exit","Make a U-turn"],correct:2,explanation:"Continue safely and leave at the next appropriate exit. Never reverse or make a U-turn on a motorway."},
+{id:7,category:"Vulnerable Road Users",question:"Why should you leave plenty of space when passing a cyclist?",answers:["Cyclists always have priority","They can be affected by wind, road surfaces and unexpected hazards","It makes them travel faster","Mirrors are unnecessary"],correct:1,explanation:"Extra space helps account for hazards and gives the cyclist room to manoeuvre."},
+{id:8,category:"Vulnerable Road Users",question:"When approaching a pedestrian crossing, what should you be prepared to do?",answers:["Speed up","Stop when required and give appropriate priority","Flash headlights to make pedestrians cross","Drive around waiting pedestrians"],correct:1,explanation:"Approach with care and be prepared to stop when the crossing rules require it."},
+{id:9,category:"Speed",question:"Why might you need to drive below the posted speed limit?",answers:["Posted limits are suggestions","Road and weather conditions may make the limit unsafe","It removes the need to use mirrors","It guarantees a collision cannot happen"],correct:1,explanation:"A posted limit is a maximum, not a target. Conditions may require a lower speed."},
+{id:10,category:"Speed",question:"Which situation is a good reason to reduce speed?",answers:["Poor visibility","A familiar road","A clean windscreen","An empty passenger seat"],correct:0,explanation:"Poor visibility reduces the time available to spot and react to hazards."},
+{id:11,category:"Safety",question:"What is the main benefit of a safe following distance?",answers:["More time to react and stop","It prevents overtaking","It guarantees the vehicle behind stays back","It removes the need to brake"],correct:0,explanation:"A suitable gap gives you more time and space to respond to hazards."},
+{id:12,category:"Safety",question:"If you become tired during a journey, what is the safest approach?",answers:["Open a window and continue","Turn the radio up","Take a proper break in a safe place","Drive faster to finish sooner"],correct:2,explanation:"Fatigue can seriously affect concentration. A proper break is safer than trying to fight sleep while driving."},
+{id:13,category:"Weather",question:"What can heavy rain do to your stopping distance?",answers:["Always shorten it","Have no effect","Increase it","Make it identical on every road"],correct:2,explanation:"Reduced grip on a wet road can increase the distance needed to stop."},
+{id:14,category:"Weather",question:"What should you expect when roads are icy?",answers:["Less grip and potentially much longer stopping distances","More grip","Shorter braking distances","No change to handling"],correct:0,explanation:"Ice can greatly reduce grip, so speed and following distance should be adjusted."},
+{id:15,category:"Vehicle Safety",question:"Why should tyres be checked regularly?",answers:["Only for appearance","Their condition and pressure affect safety and handling","To make the horn louder","To avoid using mirrors"],correct:1,explanation:"Tyre condition and correct pressure are important for grip, steering and braking."},
+{id:16,category:"Vehicle Safety",question:"Before setting off, what should you do with your mirrors?",answers:["Adjust them for the best safe view","Fold them in","Cover them","Only check the interior mirror"],correct:0,explanation:"Mirrors should be correctly adjusted before moving so you can observe effectively."},
+{id:17,category:"Overtaking",question:"Before overtaking, what should you establish?",answers:["That it is safe and legal with enough time and space","That the car behind is close","That you can exceed any speed limit","That you know the road"],correct:0,explanation:"Only overtake when the manoeuvre can be completed safely and legally."},
+{id:18,category:"Overtaking",question:"Why can overtaking near a bend be risky?",answers:["The road is always wider","Your view of approaching traffic may be limited","Indicators stop working","Other vehicles cannot see you"],correct:1,explanation:"Limited visibility can hide approaching vehicles and hazards."},
+{id:19,category:"Dual Carriageways",question:"After overtaking on a dual carriageway, when appropriate, what should you normally do?",answers:["Stay in the right lane indefinitely","Return to the left lane","Stop in the middle lane","Use the hard shoulder"],correct:1,explanation:"Keep left unless overtaking or another permitted reason requires a different lane."},
+{id:20,category:"Night Driving",question:"Why should you avoid staring directly at bright oncoming headlights?",answers:["They can dazzle you and reduce vision","They damage the engine","They make the road wet","They change the speed limit"],correct:0,explanation:"Glare can temporarily reduce your ability to see the road and hazards."},
+{id:21,category:"Attitude",question:"Another driver makes a mistake. What is the safest response?",answers:["Compete with them","Stay calm and allow extra space","Follow closely","Use the horn repeatedly"],correct:1,explanation:"Staying calm and creating space helps prevent a mistake becoming a dangerous situation."},
+{id:22,category:"Attitude",question:"Why is patience useful in busy traffic?",answers:["It encourages safer decisions","It guarantees no delays","It gives you priority","It removes the need to signal"],correct:0,explanation:"Patience reduces pressure to make risky manoeuvres."},
+{id:23,category:"Emergencies",question:"If your vehicle develops a serious problem, what should you prioritise?",answers:["Stopping or getting to a safe place when possible","Continuing at higher speed","Stopping in a live traffic lane if avoidable","Turning off all lights"],correct:0,explanation:"Your priority should be to reduce danger to yourself and others and follow the appropriate emergency procedure."},
+{id:24,category:"Hazard Awareness",question:"What is a developing hazard?",answers:["A situation that could require you to change speed or direction","A road sign that is always temporary","A vehicle that is parked legally","Any green traffic light"],correct:0,explanation:"Developing hazards are situations that may become more serious and require a response."},
+{id:25,category:"Hazard Awareness",question:"Why should you scan well ahead while driving?",answers:["To spot developing hazards early","To avoid checking mirrors","To drive faster","To predict every driver's exact actions"],correct:0,explanation:"Looking well ahead gives you more time to identify and respond to hazards."},
+{id:26,category:"Road Markings",question:"What is the purpose of road markings?",answers:["They provide information, warnings and restrictions to road users","They are only decorative","They replace all road signs","They show who owns the road"],correct:0,explanation:"Road markings communicate rules, guidance and warnings."},
+{id:27,category:"Pedestrians",question:"Why should you take extra care near schools and busy pedestrian areas?",answers:["Children and pedestrians may behave unpredictably","Cars have automatic priority","Speed limits do not apply","Pedestrians cannot enter the road"],correct:0,explanation:"Pedestrian activity can create sudden hazards, so observation and speed choice are important."},
+{id:28,category:"Motorways",question:"Why should you check your mirrors frequently on a motorway?",answers:["Traffic can approach quickly and conditions can change","It lets you ignore blind spots","It means you never need to look ahead","It allows any speed"],correct:0,explanation:"Regular observation helps you maintain awareness of traffic around you."},
+{id:29,category:"Vehicle Safety",question:"Why should loose objects in a vehicle be secured?",answers:["They can move and become a hazard during sudden braking","They improve fuel economy","They make airbags unnecessary","They increase tyre grip"],correct:0,explanation:"Loose objects can distract the driver or move dangerously if the vehicle brakes suddenly."},
+{id:30,category:"Safe Driving",question:"What is the best general approach when visibility is suddenly reduced?",answers:["Reduce speed appropriately and increase observation","Accelerate to leave the area","Close your eyes briefly","Follow the vehicle ahead very closely"],correct:0,explanation:"Reduced visibility means you need more time to see and react to hazards."}
+];
+
+const state=JSON.parse(localStorage.getItem("theoryTrainer")||'{"status":{},"answered":{},"correct":0,"total":0}');
+function save(){localStorage.setItem("theoryTrainer",JSON.stringify(state));updateDashboard();}
+function show(id){document.querySelectorAll("main>section").forEach(x=>x.classList.add("hidden"));document.getElementById(id).classList.remove("hidden");if(id==="home")updateDashboard();if(id==="bank")renderBank("all");}
+function status(id){return state.status[id]||"unanswered"}
+function mark(id,s){state.status[id]=s;save();renderBank(document.getElementById("bankFilter").value)}
+function updateDashboard(){
+ const answered=Object.keys(state.answered).length, known=QUESTIONS.filter(q=>status(q.id)==="known").length, dont=QUESTIONS.filter(q=>status(q.id)==="dontknow").length;
+ document.getElementById("answered").textContent=answered;document.getElementById("known").textContent=known;document.getElementById("unknown").textContent=dont;
+ document.getElementById("accuracy").textContent=(state.total?Math.round(state.correct/state.total*100):0)+"%";
+ const cats=[...new Set(QUESTIONS.map(q=>q.category))];
+ document.getElementById("categoryProgress").innerHTML=cats.map(c=>{let qs=QUESTIONS.filter(q=>q.category===c),a=qs.filter(q=>status(q.id)==="known").length,p=Math.round(a/qs.length*100);return `<div style="margin:12px 0"><div class="space"><strong>${c}</strong><span>${a}/${qs.length} marked know</span></div><div class="progress"><div style="width:${p}%"></div></div></div>`}).join("");
+}
+function startPractice(filter="all"){
+ document.getElementById("practiceFilter").value=filter;show("practice");
+ let pool=QUESTIONS.filter(q=>filter==="all"?true:filter==="dontknow"?status(q.id)==="dontknow":status(q.id)==="unanswered");
+ if(!pool.length){document.getElementById("practiceArea").innerHTML="<div class='result ok'>No questions in this set yet 🎉</div>";return}
+ pool.sort(()=>Math.random()-.5);renderPracticeQuestion(pool[0],pool);
+}
+function renderPracticeQuestion(q,pool){
+ let idx=pool.findIndex(x=>x.id===q.id);
+ document.getElementById("practiceArea").innerHTML=`<div class="question">
+ <span class="tag">${q.category}</span><p class="muted small">Question ${idx+1} of ${pool.length}</p><h2>${q.question}</h2>
+ <div class="answers">${q.answers.map((a,i)=>`<button onclick="answerPractice(${q.id},${i},this)">${String.fromCharCode(65+i)}. ${a}</button>`).join("")}</div>
+ <div id="feedback"></div><div class="row" style="margin-top:14px">
+ <button class="good" onclick="mark(${q.id},'known')">✓ Know</button><button class="bad" onclick="mark(${q.id},'dontknow')">✗ Don't know</button>
+ <button class="primary" id="nextBtn" onclick="nextPractice(${q.id})" disabled>Next question</button></div></div>`;
+ window.currentPractice={pool,idx};
+}
+function answerPractice(id,i,btn){
+ let q=QUESTIONS.find(x=>x.id===id);document.querySelectorAll(".answers button").forEach((b,n)=>{b.disabled=true;if(n===q.correct)b.classList.add("correct")});
+ if(i!==q.correct)btn.classList.add("wrong");
+ state.answered[id]=i;state.total++;if(i===q.correct)state.correct++;
+ document.getElementById("feedback").innerHTML=`<div class="result ${i===q.correct?"ok":"no"}><strong>${i===q.correct?"Correct":"Not quite"}</strong><br>${q.explanation}</div>`;
+ document.getElementById("nextBtn").disabled=false;save();
+}
+function nextPractice(){let x=window.currentPractice;if(!x)return;let n=x.idx+1;if(n>=x.pool.length)n=0;renderPracticeQuestion(x.pool[n],x.pool)}
+function startMock(){
+ let size=Number(document.getElementById("mockSize").value),pool=[...QUESTIONS].sort(()=>Math.random()-.5).slice(0,size);window.mock={pool,idx:0,score:0};renderMock();
+}
+function renderMock(){
+ let m=window.mock;if(m.idx>=m.pool.length){document.getElementById("mockArea").innerHTML=`<div class="result ok"><h3>Mock complete</h3><p>Score: <strong>${m.score}/${m.pool.length}</strong> (${Math.round(m.score/m.pool.length*100)}%)</p><button class="primary" onclick="startMock()">Try another mock</button></div>`;return}
+ let q=m.pool[m.idx];document.getElementById("mockArea").innerHTML=`<div class="question"><span class="tag">${q.category}</span><p class="muted">Question ${m.idx+1} of ${m.pool.length}</p><h2>${q.question}</h2><div class="answers">${q.answers.map((a,i)=>`<button onclick="answerMock(${i})">${String.fromCharCode(65+i)}. ${a}</button>`).join("")}</div><div id="mockFeedback"></div></div>`;
+}
+function answerMock(i){let m=window.mock,q=m.pool[m.idx],buttons=document.querySelectorAll("#mockArea .answers button");buttons.forEach((b,n)=>{b.disabled=true;if(n===q.correct)b.classList.add("correct")});if(i===q.correct)m.score++;document.getElementById("mockFeedback").innerHTML=`<div class="result ${i===q.correct?"ok":"no"}">${i===q.correct?"Correct":"Incorrect"} — ${q.explanation}</div><button class="primary" style="margin-top:12px" onclick="window.mock.idx++;renderMock()">Next</button>`}
+function renderBank(filter="all"){
+ let qs=QUESTIONS.filter(q=>filter==="all"?true:status(q.id)===filter);
+ document.getElementById("bankArea").innerHTML=`<div style="overflow:auto"><table><thead><tr><th>#</th><th>Category</th><th>Question</th><th>Status</th><th>Action</th></tr></thead><tbody>${qs.map(q=>`<tr><td>${q.id}</td><td>${q.category}</td><td>${q.question}</td><td>${status(q.id)}</td><td><div class="row"><button class="good" onclick="mark(${q.id},'known')">Know</button><button class="bad" onclick="mark(${q.id},'dontknow')">Don't know</button></div></td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function downloadFile(filename,content,type){
+ const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+function exportJSON(){
+ downloadFile("theory-question-bank.json",JSON.stringify(QUESTIONS,null,2),"application/json");
+}
+function csvEscape(value){
+ const s=String(value??"");
+ return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function exportCSV(){
+ const header=["id","category","question","answerA","answerB","answerC","answerD","correct","explanation"];
+ const rows=QUESTIONS.map(q=>[
+   q.id,q.category,q.question,q.answers[0],q.answers[1],q.answers[2],q.answers[3],q.correct,q.explanation
+ ].map(csvEscape).join(","));
+ downloadFile("theory-question-bank.csv",[header.join(","),...rows].join("\n"),"text/csv;charset=utf-8");
+}
+function downloadTemplate(){
+ const header="id,category,question,answerA,answerB,answerC,answerD,correct,explanation";
+ const example='31,Road Signs,"What does a blue circular sign usually give?","A mandatory instruction","A warning","A parking restriction","A motorway warning",0,"Blue circular signs are commonly used for mandatory instructions."';
+ downloadFile("theory-question-template.csv",header+"\n"+example+"\n","text/csv;charset=utf-8");
+}
+function parseCSV(text){
+ const rows=[];let row=[],cell="",quoted=false;
+ for(let i=0;i<text.length;i++){
+   const ch=text[i],next=text[i+1];
+   if(quoted){
+     if(ch=='"' && next=='"'){cell+='"';i++}
+     else if(ch=='"') quoted=false;
+     else cell+=ch;
+   }else{
+     if(ch=='"') quoted=true;
+     else if(ch==","){row.push(cell);cell=""}
+     else if(ch=="\n"){row.push(cell);rows.push(row);row=[];cell=""}
+     else if(ch!="\r") cell+=ch;
+   }
+ }
+ row.push(cell);if(row.length>1||row[0]!="")rows.push(row);
+ return rows;
+}
+function normaliseQuestion(q,index){
+ const answers=q.answers||[q.answerA,q.answerB,q.answerC,q.answerD];
+ if(!q.category||!q.question||!Array.isArray(answers)||answers.length!==4) throw new Error("Question "+(index+1)+" needs a category, question and exactly 4 answers.");
+ const correct=Number(q.correct);
+ if(!Number.isInteger(correct)||correct<0||correct>3) throw new Error("Question "+(index+1)+" has an invalid correct value. Use 0, 1, 2 or 3.");
+ return {
+   id:Number(q.id)||index+1,
+   category:String(q.category).trim(),
+   question:String(q.question).trim(),
+   answers:answers.map(String),
+   correct,
+   explanation:String(q.explanation||"").trim()
+ };
+}
+async function importQuestions(){
+ const input=document.getElementById("questionFile"),out=document.getElementById("importResult");
+ if(!input.files.length){out.innerHTML='<div class="result no">Choose a JSON or CSV file first.</div>';return}
+ try{
+   const file=input.files[0],text=await file.text();
+   let imported;
+   if(file.name.toLowerCase().endsWith(".json")){
+     imported=JSON.parse(text);
+     if(!Array.isArray(imported)) throw new Error("JSON must contain an array of questions.");
+   }else{
+     const rows=parseCSV(text);
+     if(rows.length<2) throw new Error("CSV needs a header row and at least one question.");
+     const headers=rows[0].map(x=>x.trim());
+     const required=["id","category","question","answerA","answerB","answerC","answerD","correct","explanation"];
+     const missing=required.filter(x=>!headers.includes(x));
+     if(missing.length) throw new Error("CSV is missing: "+missing.join(", "));
+     imported=rows.slice(1).filter(r=>r.some(x=>x.trim()!=="")).map(r=>{
+       const o={};headers.forEach((h,i)=>o[h]=r[i]??"");return o;
+     });
+   }
+   const cleaned=imported.map(normaliseQuestion);
+   const ids=new Set();cleaned.forEach(q=>{if(ids.has(q.id))throw new Error("Duplicate question ID: "+q.id);ids.add(q.id)});
+   const oldStatus={...state.status};
+   QUESTIONS.splice(0,QUESTIONS.length,...cleaned);
+   state.status={};
+   cleaned.forEach(q=>{if(oldStatus[q.id])state.status[q.id]=oldStatus[q.id]});
+   state.answered={};state.correct=0;state.total=0;
+   save();renderBank("all");updateDashboard();
+   out.innerHTML='<div class="result ok"><strong>Imported '+cleaned.length+' questions.</strong> Your question bank has been updated.</div>';
+ }catch(e){
+   out.innerHTML='<div class="result no"><strong>Import failed:</strong> '+e.message+'</div>';
+ }
+}
+
+function countdown(){let target=new Date("2026-12-06T09:00:00+00:00"),d=target-new Date();if(d<0){document.getElementById("countdown").textContent="Test date reached";return}let days=Math.floor(d/86400000),h=Math.floor(d/3600000)%24,mi=Math.floor(d/60000)%60;document.getElementById("countdown").textContent=`${days} days, ${h} hours, ${mi} minutes to go`;}
+setInterval(countdown,1000);countdown();updateDashboard();
+</script>
+</body>
+</html>
