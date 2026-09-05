@@ -145,8 +145,11 @@ const QUESTIONS=[
 ];
 
 const STORAGE_KEY="theoryTrainer.v2";
-const DEFAULT_STATE={status:{},answered:{},history:{},correct:0,total:0,mockHistory:[]};
+const DEFAULT_STATE={status:{},answered:{},history:{},correct:0,total:0,mockHistory:[],questionBank:null};
 let state=loadState();
+if(Array.isArray(state.questionBank) && state.questionBank.length){
+  QUESTIONS.splice(0,QUESTIONS.length,...state.questionBank);
+}
 
 function loadState(){
   try{
@@ -167,10 +170,39 @@ function loadState(){
   }
 }
 function save(){
+  state.questionBank=QUESTIONS.map(q=>({
+    id:q.id,category:q.category,question:q.question,
+    answers:[...q.answers],correct:q.correct,explanation:q.explanation
+  }));
   try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
   catch(e){console.warn("Could not save progress:",e);}
   updateDashboard();
 }
+
+function updateDashboard(){
+  const answered=Object.keys(state.answered||{}).length;
+  const known=QUESTIONS.filter(q=>status(q.id)==="known").length;
+  const dont=QUESTIONS.filter(q=>status(q.id)==="dontknow").length;
+  const elAnswered=document.getElementById("answered");
+  const elKnown=document.getElementById("known");
+  const elUnknown=document.getElementById("unknown");
+  const elAccuracy=document.getElementById("accuracy");
+  const elCats=document.getElementById("categoryProgress");
+  if(elAnswered) elAnswered.textContent=answered+" / "+QUESTIONS.length;
+  if(elKnown) elKnown.textContent=known;
+  if(elUnknown) elUnknown.textContent=dont;
+  if(elAccuracy) elAccuracy.textContent=(state.total?Math.round(state.correct/state.total*100):0)+"%";
+  if(elCats){
+    const cats=[...new Set(QUESTIONS.map(q=>q.category))];
+    elCats.innerHTML=cats.map(c=>{
+      const qs=QUESTIONS.filter(q=>q.category===c);
+      const a=qs.filter(q=>status(q.id)==="known").length;
+      const p=qs.length?Math.round(a/qs.length*100):0;
+      return `<div style="margin:12px 0"><div class="space"><strong>${c}</strong><span>${a}/${qs.length} marked know</span></div><div class="progress"><div style="width:${p}%"></div></div></div>`;
+    }).join("");
+  }
+}
+
 function status(id){return state.status[id]||"unanswered"}
 function mark(id,s){
   state.status[id]=s; save();
@@ -342,6 +374,7 @@ async function importQuestions(){
       if(oldHistory[id])state.history[id]=oldHistory[id];
       if(Object.prototype.hasOwnProperty.call(oldAnswered,id))state.answered[id]=oldAnswered[id];
     });
+    state.questionBank=cleaned.map(q=>({...q,answers:[...q.answers]}));
     state.total=Object.values(state.history).reduce((s,h)=>s+(Number(h.attempts)||0),0);
     state.correct=Object.values(state.history).reduce((s,h)=>s+(Number(h.correct)||0),0);
     save();renderBank("all");updateDashboard();
