@@ -144,17 +144,80 @@ const QUESTIONS=[
 {id:30,category:"Safe Driving",question:"What is the best general approach when visibility is suddenly reduced?",answers:["Reduce speed appropriately and increase observation","Accelerate to leave the area","Close your eyes briefly","Follow the vehicle ahead very closely"],correct:0,explanation:"Reduced visibility means you need more time to see and react to hazards."}
 ];
 
-const state=JSON.parse(localStorage.getItem("theoryTrainer")||'{"status":{},"answered":{},"correct":0,"total":0}');
-function save(){localStorage.setItem("theoryTrainer",JSON.stringify(state));updateDashboard();}
-function show(id){document.querySelectorAll("main>section").forEach(x=>x.classList.add("hidden"));document.getElementById(id).classList.remove("hidden");if(id==="home")updateDashboard();if(id==="bank")renderBank("all");}
+const STORAGE_KEY="theoryTrainer.v2";
+const DEFAULT_STATE={status:{},answered:{},history:{},correct:0,total:0,mockHistory:[]};
+let state=loadState();
+
+function loadState(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw) return JSON.parse(JSON.stringify(DEFAULT_STATE));
+    const saved=JSON.parse(raw);
+    return {
+      ...JSON.parse(JSON.stringify(DEFAULT_STATE)),
+      ...saved,
+      status:saved.status||{},
+      answered:saved.answered||{},
+      history:saved.history||{},
+      mockHistory:saved.mockHistory||[]
+    };
+  }catch(e){
+    console.warn("Could not load saved progress:",e);
+    return JSON.parse(JSON.stringify(DEFAULT_STATE));
+  }
+}
+function save(){
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+  catch(e){console.warn("Could not save progress:",e);}
+  updateDashboard();
+}
 function status(id){return state.status[id]||"unanswered"}
-function mark(id,s){state.status[id]=s;save();renderBank(document.getElementById("bankFilter").value)}
-function updateDashboard(){
- const answered=Object.keys(state.answered).length, known=QUESTIONS.filter(q=>status(q.id)==="known").length, dont=QUESTIONS.filter(q=>status(q.id)==="dontknow").length;
- document.getElementById("answered").textContent=answered;document.getElementById("known").textContent=known;document.getElementById("unknown").textContent=dont;
- document.getElementById("accuracy").textContent=(state.total?Math.round(state.correct/state.total*100):0)+"%";
- const cats=[...new Set(QUESTIONS.map(q=>q.category))];
- document.getElementById("categoryProgress").innerHTML=cats.map(c=>{let qs=QUESTIONS.filter(q=>q.category===c),a=qs.filter(q=>status(q.id)==="known").length,p=Math.round(a/qs.length*100);return `<div style="margin:12px 0"><div class="space"><strong>${c}</strong><span>${a}/${qs.length} marked know</span></div><div class="progress"><div style="width:${p}%"></div></div></div>`}).join("");
+function mark(id,s){
+  state.status[id]=s; save();
+  const f=document.getElementById("bankFilter"); if(f) renderBank(f.value);
+}
+function show(id){
+  document.querySelectorAll("main>section").forEach(x=>x.classList.add("hidden"));
+  document.getElementById(id).classList.remove("hidden");
+  if(id==="home")updateDashboard();
+  if(id==="bank")renderBank("all");
+}
+function recordAnswer(id,selected,wasCorrect){
+  const key=String(id);
+  if(!state.history[key]) state.history[key]={attempts:0,correct:0,wrong:0,lastAnswer:null};
+  state.history[key].attempts++;
+  state.history[key].lastAnswer=selected;
+  if(wasCorrect) state.history[key].correct++; else state.history[key].wrong++;
+  state.answered[key]=selected;
+  state.total++;
+  if(wasCorrect) state.correct++;
+}
+function resetProgress(){
+  if(!confirm("Reset all saved answers, scores and Know/Don't Know statuses? Your questions will stay intact.")) return;
+  state=JSON.parse(JSON.stringify(DEFAULT_STATE));
+  save(); renderBank("all"); updateDashboard();
+  alert("Progress reset.");
+}
+function exportProgress(){
+  downloadFile("theory-trainer-progress.json",JSON.stringify({
+    app:"Theory Test Trainer",version:2,exportedAt:new Date().toISOString(),state
+  },null,2),"application/json");
+}
+async function importProgress(){
+  const input=document.getElementById("progressFile"),out=document.getElementById("progressResult");
+  if(!input.files.length){out.innerHTML='<div class="result no">Choose a progress JSON file first.</div>';return}
+  try{
+    const payload=JSON.parse(await input.files[0].text()), imported=payload.state||payload;
+    if(!imported || typeof imported!=="object" || typeof imported.status!=="object")
+      throw new Error("This does not look like a Theory Test Trainer progress file.");
+    state={
+      ...JSON.parse(JSON.stringify(DEFAULT_STATE)),...imported,
+      status:imported.status||{},answered:imported.answered||{},
+      history:imported.history||{},mockHistory:imported.mockHistory||[]
+    };
+    save(); renderBank("all"); updateDashboard();
+    out.innerHTML='<div class="result ok"><strong>Progress restored.</strong> Your saved answers and scores are back.</div>';
+  }catch(e){out.innerHTML='<div class="result no"><strong>Import failed:</strong> '+e.message+'</div>'}
 }
 function startPractice(filter="all"){
  document.getElementById("practiceFilter").value=filter;show("practice");
@@ -175,7 +238,7 @@ function renderPracticeQuestion(q,pool){
 function answerPractice(id,i,btn){
  let q=QUESTIONS.find(x=>x.id===id);document.querySelectorAll(".answers button").forEach((b,n)=>{b.disabled=true;if(n===q.correct)b.classList.add("correct")});
  if(i!==q.correct)btn.classList.add("wrong");
- state.answered[id]=i;state.total++;if(i===q.correct)state.correct++;
+ recordAnswer(id,i,i===q.correct);
  document.getElementById("feedback").innerHTML=`<div class="result ${i===q.correct?"ok":"no"}><strong>${i===q.correct?"Correct":"Not quite"}</strong><br>${q.explanation}</div>`;
  document.getElementById("nextBtn").disabled=false;save();
 }
@@ -190,7 +253,7 @@ function renderMock(){
 function answerMock(i){let m=window.mock,q=m.pool[m.idx],buttons=document.querySelectorAll("#mockArea .answers button");buttons.forEach((b,n)=>{b.disabled=true;if(n===q.correct)b.classList.add("correct")});if(i===q.correct)m.score++;document.getElementById("mockFeedback").innerHTML=`<div class="result ${i===q.correct?"ok":"no"}">${i===q.correct?"Correct":"Incorrect"} — ${q.explanation}</div><button class="primary" style="margin-top:12px" onclick="window.mock.idx++;renderMock()">Next</button>`}
 function renderBank(filter="all"){
  let qs=QUESTIONS.filter(q=>filter==="all"?true:status(q.id)===filter);
- document.getElementById("bankArea").innerHTML=`<div style="overflow:auto"><table><thead><tr><th>#</th><th>Category</th><th>Question</th><th>Status</th><th>Action</th></tr></thead><tbody>${qs.map(q=>`<tr><td>${q.id}</td><td>${q.category}</td><td>${q.question}</td><td>${status(q.id)}</td><td><div class="row"><button class="good" onclick="mark(${q.id},'known')">Know</button><button class="bad" onclick="mark(${q.id},'dontknow')">Don't know</button></div></td></tr>`).join("")}</tbody></table></div>`;
+ document.getElementById("bankArea").innerHTML=`<div style="overflow:auto"><table><thead><tr><th>#</th><th>Category</th><th>Question</th><th>Attempts</th><th>Score</th><th>Status</th><th>Action</th></tr></thead><tbody>${qs.map(q=>{const h=state.history[String(q.id)]||{attempts:0,correct:0};const pct=h.attempts?Math.round(h.correct/h.attempts*100):0;return `<tr><td>${q.id}</td><td>${q.category}</td><td>${q.question}</td><td>${h.attempts}</td><td>${h.attempts?pct+"%":"—"}</td><td>${status(q.id)}</td><td><div class="row"><button class="good" onclick="mark(${q.id},'known')">Know</button><button class="bad" onclick="mark(${q.id},'dontknow')">Don't know</button></div></td></tr>`}).join("")}</tbody></table></div>`;
 }
 
 function downloadFile(filename,content,type){
@@ -270,12 +333,18 @@ async function importQuestions(){
    }
    const cleaned=imported.map(normaliseQuestion);
    const ids=new Set();cleaned.forEach(q=>{if(ids.has(q.id))throw new Error("Duplicate question ID: "+q.id);ids.add(q.id)});
-   const oldStatus={...state.status};
-   QUESTIONS.splice(0,QUESTIONS.length,...cleaned);
-   state.status={};
-   cleaned.forEach(q=>{if(oldStatus[q.id])state.status[q.id]=oldStatus[q.id]});
-   state.answered={};state.correct=0;state.total=0;
-   save();renderBank("all");updateDashboard();
+   const oldStatus={...state.status},oldHistory={...state.history},oldAnswered={...state.answered};
+    QUESTIONS.splice(0,QUESTIONS.length,...cleaned);
+    state.status={};state.history={};state.answered={};
+    cleaned.forEach(q=>{
+      const id=String(q.id);
+      if(oldStatus[q.id])state.status[q.id]=oldStatus[q.id];
+      if(oldHistory[id])state.history[id]=oldHistory[id];
+      if(Object.prototype.hasOwnProperty.call(oldAnswered,id))state.answered[id]=oldAnswered[id];
+    });
+    state.total=Object.values(state.history).reduce((s,h)=>s+(Number(h.attempts)||0),0);
+    state.correct=Object.values(state.history).reduce((s,h)=>s+(Number(h.correct)||0),0);
+    save();renderBank("all");updateDashboard();
    out.innerHTML='<div class="result ok"><strong>Imported '+cleaned.length+' questions.</strong> Your question bank has been updated.</div>';
  }catch(e){
    out.innerHTML='<div class="result no"><strong>Import failed:</strong> '+e.message+'</div>';
